@@ -55,7 +55,7 @@ def analyze():
     8. Calculate unique, realistic market sizing metrics specifically for the '{geographic_market}' market: TAM (Total Addressable Market), SAM (Serviceable Addressable Market), and SOM (Serviceable Obtainable Market). Include a brief explanation of how these were calculated.
     9. Boardroom Debate: 3 reasons to invest (Bull Agent), 3 reasons NOT to invest (Bear Agent), and a final Verdict by a Judge Agent (verdict title: "Invest" / "Avoid" / "Invest with Conditions", confidence percentage 0-100, and a brief reasoning justification).
     
-    Output strictly VALID JSON with this structure, and do NOT include any emojis in any of the response text:
+    Output strictly VALID JSON with this structure. Do NOT include any emojis in any of the response text. IMPORTANT: Ensure all JSON string values are written on a single line and do not contain raw newlines or control characters. If you need a line break, write the literal characters '\\n' inside the string:
     {{
       "research": {{
           "competitors": [ {{ "name": "...", "market_share": 30, "target_audience": "...", "marketing_strategy": "..." }}, ... ],
@@ -181,19 +181,24 @@ def analyze():
         
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             extracted_json = clean_response[start_idx:end_idx+1]
+            
+            # Aggressive sanitization of raw control characters (like newlines inside strings)
+            # which break standard JSON parsers.
+            sanitized = re.sub(r'[\x00-\x1f\x7f]', ' ', extracted_json)
+            # Remove trailing commas in objects and arrays
+            sanitized = re.sub(r',\s*}', '}', sanitized)
+            sanitized = re.sub(r',\s*]', ']', sanitized)
+            
             try:
+                full_data = json.loads(sanitized)
+                research_data = full_data.get('research', {})
+                strategy_data = full_data.get('strategy', {})
+            except Exception as e:
+                # If still failing, try loading the raw extracted_json as fallback
+                print(f"Sanitized JSON load failed: {e}. Trying raw extracted JSON...")
                 full_data = json.loads(extracted_json)
                 research_data = full_data.get('research', {})
                 strategy_data = full_data.get('strategy', {})
-            except json.JSONDecodeError as decode_err:
-                 # 3. Final fallback, sometimes it adds a trailing comma before }
-                 print(f"Initial strict JSON load failed: {decode_err}. Attempting aggressive cleanup...")
-                 # Quick trailing comma cleanup
-                 cleaned = re.sub(r',\s*}', '}', extracted_json)
-                 cleaned = re.sub(r',\s*]', ']', cleaned)
-                 full_data = json.loads(cleaned)
-                 research_data = full_data.get('research', {})
-                 strategy_data = full_data.get('strategy', {})
         else:
             raise ValueError("No valid JSON found in response")
             
