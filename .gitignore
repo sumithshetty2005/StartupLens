@@ -24,3 +24,5 @@ test_query_2.py
 test_rag.ipynb
 test_rag_accuracy.py
 test_reranker.py
+venv_test/
+data/chroma/
