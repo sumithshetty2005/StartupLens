@@ -9,7 +9,7 @@ pinned: false
 ---
 -->
 
-# 🔎 StartupLens: Your Autonomous AI Co-Founder
+# 🔎 StartupLens: Your Autonomous AI Copilot
 
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
