@@ -7,3 +7,20 @@ venv/
 *.txt
 !requirements.txt
 .git_old/
+# Local scratch and test scripts
+scratch/
+check_docs.py
+debug_imports.py
+debug_query_2.py
+design.md
+eval_rag.py
+inspect_all.py
+inspect_rag_response.py
+rag_accuracy_report.json
+run_notebook_sim.py
+test_json.py
+test_minimal.py
+test_query_2.py
+test_rag.ipynb
+test_rag_accuracy.py
+test_reranker.py
