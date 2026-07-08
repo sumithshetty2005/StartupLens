@@ -153,6 +153,5 @@ To ensure high-quality and structured startup validation, StartupLens delegates 
 3. **Failure Analyst Agent**: Summarizes context-specific historical startup failure details and generates preventative action checklists based on RAG/CRAG results.
 
 ## 🔗 Project Links
-- **Demo Video Link**: [Video Presentation](## 🔗 Project Links
 - **Demo Video Link**: [Video Presentation](https://drive.google.com/drive/u/0/folders/1Fiobl0-W6ajw6asrBZznjJ7qF0629BAj)
-- **Live Deployed Application**: [https://startup-lens-eight.vercel.app](https://startup-lens-ten.vercel.app/))
+- **Live Deployed Application**: [https://startup-lens-eight.vercel.app](https://startup-lens-ten.vercel.app/)
