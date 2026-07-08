@@ -2,10 +2,10 @@ import os
 import shutil
 import pandas as pd
 from langchain_core.documents import Document
-from src.rag.config import CSV_DIR, CHROMA_DB_DIR
+from src.rag.config import CSV_DIR, QDRANT_DIR
 from src.rag.embeddings import get_embeddings
 from src.rag.enrichment import MetadataProvider
-from langchain_chroma import Chroma
+from langchain_qdrant import QdrantVectorStore
 
 def load_documents_from_csvs():
     documents = []
@@ -150,19 +150,21 @@ def ingest_data():
     print("Initializing HuggingFace BGE Embeddings...")
     embeddings = get_embeddings()
     
-    print("Creating/updating Chroma vector store...")
-    os.makedirs(os.path.dirname(CHROMA_DB_DIR), exist_ok=True)
+    print("Creating/updating Qdrant vector store...")
+    os.makedirs(os.path.dirname(QDRANT_DIR), exist_ok=True)
     
-    if os.path.exists(CHROMA_DB_DIR):
-        print(f"Removing old vector store directory at {CHROMA_DB_DIR}")
-        shutil.rmtree(CHROMA_DB_DIR)
+    if os.path.exists(QDRANT_DIR):
+        print(f"Removing old vector store directory at {QDRANT_DIR}")
+        shutil.rmtree(QDRANT_DIR)
+    os.makedirs(QDRANT_DIR, exist_ok=True)
         
-    vectorstore = Chroma.from_documents(
+    vectorstore = QdrantVectorStore.from_documents(
         documents=docs,
         embedding=embeddings,
-        persist_directory=CHROMA_DB_DIR
+        path=QDRANT_DIR,
+        collection_name="failed_startups"
     )
-    print("Ingestion complete. Database stored at", CHROMA_DB_DIR)
+    print("Ingestion complete. Database stored at", QDRANT_DIR)
 
 if __name__ == "__main__":
     ingest_data()

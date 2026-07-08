@@ -1,6 +1,12 @@
 import os
 os.environ["TQDM_DISABLE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 import time
+import hashlib
+import json
+import redis
+import fakeredis
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -12,6 +18,46 @@ from src.agents.agent import (
     model_fallback_name
 )
 from src.rag.retriever import get_failed_startups_info
+
+class RedisCacheManager:
+    def __init__(self, host="localhost", port=6379, db=0, socket_timeout=1.0):
+        try:
+            self.client = redis.Redis(host=host, port=port, db=db, socket_timeout=socket_timeout)
+            self.client.ping()
+            self.is_fallback = False
+            print("--> [Redis] Connected successfully to local Redis server.")
+        except Exception as e:
+            print(f"--> [Redis Warning] Local Redis server not running: {e}. Falling back to in-memory dict cache.")
+            self.client = fakeredis.FakeRedis()
+            self.is_fallback = True
+
+    def _get_key(self, idea: str, industry: str, geo_market: str) -> str:
+        raw_str = f"{idea.strip().lower()}:{industry.strip().lower()}:{geo_market.strip().lower()}"
+        hashed = hashlib.md5(raw_str.encode("utf-8")).hexdigest()
+        return f"startuplens:cache:{hashed}"
+
+    def get(self, idea: str, industry: str, geo_market: str):
+        key = self._get_key(idea, industry, geo_market)
+        try:
+            cached = self.client.get(key)
+            if cached:
+                print(f"--> [Cache Hit] Serving cached response for key: {key}")
+                return json.loads(cached.decode("utf-8"))
+        except Exception as e:
+            print(f"--> [Cache Error] Read failed: {e}")
+        return None
+
+    def set(self, idea: str, industry: str, geo_market: str, value: dict, ttl_seconds: int = 86400):
+        key = self._get_key(idea, industry, geo_market)
+        try:
+            serialized = json.dumps(value)
+            self.client.setex(key, ttl_seconds, serialized)
+            print(f"--> [Cache Write] Saved analysis response to cache under key: {key} (TTL: {ttl_seconds}s)")
+        except Exception as e:
+            print(f"--> [Cache Error] Write failed: {e}")
+
+# Instantiate global cache manager
+cache_manager = RedisCacheManager()
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -35,6 +81,11 @@ def analyze():
     custom_api_key = data.get('custom_api_key') 
     extra_context = data.get('extra_context', '')
     
+    # Check cache hit
+    cached_result = cache_manager.get(idea, industry, geographic_market)
+    if cached_result:
+        return jsonify(cached_result)
+        
     print(f"\n=== Starting KPI Analysis for: {idea} ({industry}) in market: {geographic_market} ===")
     
     master_prompt = f"""
@@ -43,7 +94,7 @@ def analyze():
     Perform a complete business deep-dive:
     1. Research 3 Competitors (Name, Market Share %, Audience, Strategy) in the target geographic market '{geographic_market}'.
     2. Identify the Whitespace Opportunity.
-    3. Calculate Viability Score (0-100).
+    3. Calculate Viability Score (0-100) using this exact weighted formula: (Market Density * 0.20) + (Entry Barrier * 0.15) + (Capital Intensity * 0.15) + (Timing & Trends * 0.20) + (Operational Complexity * 0.15) + (Scalability * 0.15).
     4. Define Risk, Roadmap, Business Models (3), Acquisition Channels (3), Target Persona, and SWOT.
     5. Financial Projections (Revenue per user, Min Investment, Break-even, Growth Rate).
        - CALCULATE realistic, unique figures based on the specific market of '{idea}' in '{geographic_market}'. DO NOT repeat the examples below.
@@ -135,7 +186,7 @@ def analyze():
                  
     # If all Gemini keys failed due to exhaustion or invalidity, trigger fallback
     if not json_response and last_error_msg and any(term in last_error_msg.upper() for term in ["QUOTA", "LIMIT", "EXHAUSTED", "INVALID", "UNAVAILABLE", "503", "429", "API KEY"]):
-         print("    -> All Gemini keys exhausted or unavailable! Falling back to Secondary (Groq: llama-3.1-8b-instant)...")
+         print("    -> All Gemini keys exhausted or unavailable! Falling back to Secondary (Groq: openai/gpt-oss-120b)...")
          groq_api_key = os.environ.get("GROQ_API_KEY")
          if not groq_api_key:
              print("    -> Missing GROQ_API_KEY for fallback.")
@@ -143,10 +194,10 @@ def analyze():
              
          try:
              from langchain_groq import ChatGroq
-             llm = ChatGroq(temperature=0.2, model_name="llama-3.1-8b-instant", groq_api_key=groq_api_key)
+             llm = ChatGroq(temperature=0.2, model_name="openai/gpt-oss-120b", groq_api_key=groq_api_key)
              response = llm.invoke(master_prompt)
              json_response = response.content
-             print("    -> Success on Secondary (Groq).")
+             print("    -> Success on Secondary (Groq: openai/gpt-oss-120b).")
          except Exception as fallback_e:
              fallback_error = str(fallback_e)
              print(f"    -> Error on Secondary: {fallback_error}")
@@ -223,14 +274,15 @@ def analyze():
             "demographics": {"age_groups": {}, "demographics_insight": "Data unavailable."}
         }
 
-    print("\n=== KPI Analysis Complete ===")
-    
-    return jsonify({
+    response_payload = {
         "idea": idea,
         "industry": industry,
         "research": research_data,
         "strategy": strategy_data
-    })
+    }
+    cache_manager.set(idea, industry, geographic_market, response_payload)
+    print("\n=== KPI Analysis Complete ===")
+    return jsonify(response_payload)
 
 @app.route('/api/failed-startups', methods=['POST'])
 def failed_startups():
@@ -251,8 +303,18 @@ def failed_startups():
     
     try:
         query_safe = query.encode('ascii', 'ignore').decode('ascii')
+        
+        # Check cache
+        cached_result = cache_manager.get(f"failed_startups:{query_safe}", "", "")
+        if cached_result:
+            return jsonify(cached_result)
+            
         print(f"\n=== Starting Failed Startups RAG Analysis for: {query_safe[:50]}... ===")
         result = get_failed_startups_info(query, groq_api_key)
+        
+        # Save cache
+        cache_manager.set(f"failed_startups:{query_safe}", "", "", result)
+        
         print("    -> RAG Analysis Complete.")
         return jsonify(result)
     except Exception as e:
@@ -264,4 +326,4 @@ def failed_startups():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 7860))
-    app.run(host='0.0.0.0', port=port, debug=True, use_reloader=True)
+    app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False)

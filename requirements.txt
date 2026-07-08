@@ -11,7 +11,9 @@ langchain-community
 langchain-huggingface
 langchain-groq
 sentence-transformers
-chromadb
-langchain-chroma
+qdrant-client
+langchain-qdrant
+redis
+fakeredis
 pandas
 flask-cors

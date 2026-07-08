@@ -1,3 +1,4 @@
+<!--
 ---
 title: StartupLens
 emoji: 🔎
@@ -6,6 +7,7 @@ colorTo: indigo
 sdk: docker
 pinned: false
 ---
+-->
 
 # 🔎 StartupLens: Your Autonomous AI Co-Founder
 
@@ -136,15 +138,21 @@ Open `http://localhost:5173` in your browser.
 
 ## ⚙️ Advanced System Architecture Details
 
-### 1. RAG Engine & Embedding Pipeline
-When a user submits an idea, the backend queries an embedded collection of startup failure stories stored in **ChromaDB**:
-*   **Ingestion**: `src/rag/ingestion.py` processes raw CSV/JSON records of startup post-mortems, chunks them, and generates dense vector embeddings using `all-MiniLM-L6-v2`.
-*   **Retrieval**: `src/rag/retriever.py` uses similarity search to pull the top 3-5 most contextually relevant failure cases.
-*   **Generation**: These failures are injected into a prompt for `GPT OSS 120b` to extract failure drivers, strategic takeaways, and dynamic checklist recommendations to avoid those issues.
+### 1. Corrective RAG (CRAG) Engine & Qdrant Pipeline
+When a user submits an idea, the backend queries an embedded collection of startup failure stories stored in **Qdrant**:
+*   **Ingestion**: `src/rag/ingestion.py` processes raw CSV/JSON records of startup post-mortems, chunks them, and generates dense vector embeddings using `BAAI/bge-base-en-v1.5` locally.
+*   **Retrieval**: `src/rag/retriever.py` uses a **Corrective RAG (CRAG)** pipeline to dynamically route execution:
+    *   **Evaluator**: Combined score calculation based on Qdrant Vector search, BM25 Keyword Search, and a pre-loaded local Cross-Encoder reranker (`ms-marco-MiniLM-L-6-v2`) on CPU.
+    *   **Routing**: If similarity confidence is **High**, it uses local database records only. If confidence is **Medium** or **Low**, it triggers corrective actions, enriching the output by combining database records with live search grounding via `web_fallback_search`.
+*   **Generation**: The failures are summarized and synthesized using `qwen/qwen3.6-27b` via Groq (with a fallback to `openai/gpt-oss-120b`).
 
 ### 2. Multi-Agent Architecture
 To ensure high-quality and structured startup validation, StartupLens delegates tasks to specialized AI agents:
 1. **Master Analyst Agent**: Coordinates the request flow, evaluates target markets, estimates timing risks, and synthesizes key metrics into a unified viability score.
 2. **Web Researcher Agent**: Operates real-time Google Search grounding tools to cross-reference trends, pull current market share stats, and discover active competitors.
-3. **Failure Analyst Agent**: Summarizes context-specific historical startup failure details and generates preventative action checklists based on RAG results.
+3. **Failure Analyst Agent**: Summarizes context-specific historical startup failure details and generates preventative action checklists based on RAG/CRAG results.
 
+## 🔗 Project Links
+- **Demo Video Link**: [Video Presentation](## 🔗 Project Links
+- **Demo Video Link**: [Video Presentation](https://drive.google.com/drive/u/0/folders/1Fiobl0-W6ajw6asrBZznjJ7qF0629BAj)
+- **Live Deployed Application**: [https://startup-lens-eight.vercel.app](https://startup-lens-ten.vercel.app/))

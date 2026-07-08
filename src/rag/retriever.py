@@ -8,12 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
-from langchain_chroma import Chroma
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
 from pydantic import BaseModel, Field
 from duckduckgo_search import DDGS
 
 from src.rag.config import (
-    CHROMA_DB_DIR,
+    QDRANT_DIR,
     GENERATOR_MODEL_NAME,
     TOP_K_RETRIEVE,
     TOP_K_RERANK,
@@ -31,10 +32,16 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 try:
     embeddings_model = get_embeddings()
-    vectorstore = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings_model)
 except Exception as e:
-    print(f"Error initializing vector store: {e}")
-    vectorstore = None
+    print(f"Error initializing embeddings model: {e}")
+    embeddings_model = None
+
+# Global reranker instance to avoid re-instantiating on every request
+try:
+    global_reranker = CrossEncoderReranker()
+except Exception as e:
+    print(f"Error initializing CrossEncoderReranker: {e}")
+    global_reranker = None
 
 class FailedStartupInfo(BaseModel):
     name: str = Field(description="Name of the startup")
@@ -158,20 +165,14 @@ _all_documents = []
 
 def get_bm25_index():
     global _bm25_instance, _all_documents
-    if _bm25_instance is None and vectorstore is not None:
+    if _bm25_instance is None:
         try:
-            res = vectorstore.get()
-            docs = []
-            for i in range(len(res['ids'])):
-                from langchain_core.documents import Document
-                docs.append(Document(
-                    page_content=res['documents'][i],
-                    metadata=res['metadatas'][i]
-                ))
+            from src.rag.ingestion import load_documents_from_csvs
+            docs = load_documents_from_csvs()
             _all_documents = docs
             _bm25_instance = SimpleBM25(docs)
         except Exception as e:
-            print(f"Error initializing BM25: {e}")
+            print(f"Error initializing BM25 from CSV: {e}")
     return _bm25_instance, _all_documents
 
 def understand_query(query: str, groq_key: str) -> dict:
@@ -530,10 +531,22 @@ def extract_failure_clusters(startups: list, groq_key: str) -> dict:
 
 def get_failed_startups_info(query: str, groq_api_key: str):
     start_time = time.time()
+    local_client = None
+    local_vectorstore = None
     try:
         groq_api_key = groq_api_key.strip() if groq_api_key else ""
         if not groq_api_key:
             return {"startups": [], "summary": "API Key is required to run RAG pipeline."}
+
+        try:
+            local_client = QdrantClient(path=QDRANT_DIR)
+            local_vectorstore = QdrantVectorStore(
+                client=local_client,
+                collection_name="failed_startups",
+                embeddings=embeddings_model
+            )
+        except Exception as e:
+            print(f"--> [Qdrant Error] Failed to initialize Qdrant local client inside query: {e}")
 
         # 1. Query Understanding
         metadata = understand_query(query, groq_api_key)
@@ -549,11 +562,12 @@ def get_failed_startups_info(query: str, groq_api_key: str):
         # 3. Parallel Retrieval: Vector Search (Top 30) + BM25 Search (Top 30)
         def run_vector_search():
             results = {}
-            if not vectorstore:
+            if not local_vectorstore:
+                print("--> [Qdrant Error] local_vectorstore is None inside search!")
                 return results
             for q in all_queries:
                 try:
-                    res = vectorstore.similarity_search_with_relevance_scores(q, k=30)
+                    res = local_vectorstore.similarity_search_with_relevance_scores(q, k=30)
                     for doc, score in res:
                         name = doc.metadata.get('name', '').strip().lower()
                         if name not in results or results[name][0] < score:
@@ -629,30 +643,28 @@ def get_failed_startups_info(query: str, groq_api_key: str):
                 "norm_bm25": boosted_b
             })
 
-        # Sort by average score to select top 60 candidates for CrossEncoder Reranking
+        # Sort by average score to select top 15 candidates for CrossEncoder Reranking
         for c in combined_candidates:
             c["initial_rank_score"] = 0.5 * c["norm_vector"] + 0.5 * c["norm_bm25"]
             
-        top_60_candidates = sorted(combined_candidates, key=lambda x: x["initial_rank_score"], reverse=True)[:60]
-        top_60_docs = [c["doc"] for c in top_60_candidates]
-        print(f"Hybrid retrieval and boosting selected {len(top_60_docs)} candidate documents.")
+        top_15_candidates = sorted(combined_candidates, key=lambda x: x["initial_rank_score"], reverse=True)[:15]
+        top_15_docs = [c["doc"] for c in top_15_candidates]
+        print(f"Hybrid retrieval and boosting selected {len(top_15_docs)} candidate documents for reranking.")
 
-        # 5. Cross-Encoder Reranking on Top 60 candidates
-        reranker = CrossEncoderReranker()
-        reranked_results = reranker.rerank(canonical_concept, top_60_docs, top_k=TOP_K_RERANK)
-        
-        # Build reranker scores map
+        # 5. Cross-Encoder Reranking on Top 15 candidates using global_reranker
         rerank_scores_map = {}
-        for score, doc in reranked_results:
-            rerank_scores_map[doc.metadata.get('name', '').strip().lower()] = score
-
+        if global_reranker:
+            reranked_results = global_reranker.rerank(canonical_concept, top_15_docs, top_k=TOP_K_RERANK)
+            for score, doc in reranked_results:
+                rerank_scores_map[doc.metadata.get('name', '').strip().lower()] = score
+        
         # 6. Hybrid Score Calculation & Level Decision
         final_startups = []
-        for idx, doc in enumerate(top_60_docs):
+        for idx, doc in enumerate(top_15_docs):
             name_clean = doc.metadata.get('name', '').strip().lower()
             cross_score = rerank_scores_map.get(name_clean, 0.0)
             
-            candidate_item = next(c for c in top_60_candidates if c["name"] == name_clean)
+            candidate_item = next(c for c in top_15_candidates if c["name"] == name_clean)
             
             hybrid_score = (
                 0.30 * candidate_item["norm_vector"] +
@@ -738,14 +750,15 @@ def get_failed_startups_info(query: str, groq_api_key: str):
             summary = web_data.get("summary", "Analysis enriched with live web sources.")
 
         else:
-            fallback_reason = "Score is Low (< 0.40). Discarding local main list, using Web Grounding."
+            fallback_reason = "Score is Low (< 0.40). Enriched with Web sources."
             is_fallback = True
             web_data = web_fallback_search(query, groq_api_key, metadata, local_docs_formatted)
-            output_startups = web_data.get("startups", [])
-            for ws in output_startups:
+            web_startups = web_data.get("startups", [])
+            for ws in web_startups:
                 ws["source"] = ws.get("source", "Web Grounding")
                 ws["hybrid_score"] = 0.20
-            summary = "No highly similar startup was found in the local database. The following analysis is enriched using live web sources."
+            output_startups = local_docs_formatted[:2] + web_startups[:1]
+            summary = "Analysis of relevant startup failures and market indicators in this category."
 
         # 8. Similarity Explanation
         local_startups_only = [s for s in output_startups if "Tabular Dataset" in s.get("source", "")]
@@ -834,6 +847,13 @@ def get_failed_startups_info(query: str, groq_api_key: str):
             },
             "local_references": []
         }
+    finally:
+        if local_client:
+            try:
+                local_client.close()
+                print("--> [Qdrant] Directory lock released successfully.")
+            except Exception as close_e:
+                print(f"--> [Qdrant Error] Failed to release directory lock: {close_e}")
 
 def synthesize_failure_intelligence(query: str, startups: list, local_references: list, groq_key: str) -> dict:
     llm = ChatGroq(temperature=0.2, model_name=GENERATOR_MODEL_NAME, groq_api_key=groq_key)
@@ -893,6 +913,20 @@ def synthesize_failure_intelligence(query: str, startups: list, local_references
             }
         }
         
+        # Clean up any literal "string" values and strip markdown asterisks
+        for k in ["competitor_summary", "historical_failure_patterns", "market_saturation_analysis", "opportunity_analysis", "risk_analysis", "recommendation"]:
+            if parsed.get(k) == "string":
+                parsed[k] = default_synthesis[k]
+            elif parsed.get(k):
+                parsed[k] = str(parsed[k]).replace("*", "")
+                
+        if isinstance(parsed.get("contrarian_take"), dict):
+            for sub_k in ["consensus", "reality"]:
+                if parsed["contrarian_take"].get(sub_k) == "string":
+                    parsed["contrarian_take"][sub_k] = default_synthesis["contrarian_take"][sub_k]
+                elif parsed["contrarian_take"].get(sub_k):
+                    parsed["contrarian_take"][sub_k] = str(parsed["contrarian_take"][sub_k]).replace("*", "")
+
         # Ensure all keys exist
         for k, v in default_synthesis.items():
             if k not in parsed or not parsed[k]:
@@ -902,8 +936,10 @@ def synthesize_failure_intelligence(query: str, startups: list, local_references
                     parsed[k] = v
                 else:
                     for sub_k, sub_v in v.items():
-                        if sub_k not in parsed[k] or not parsed[k][sub_k]:
+                        if sub_k not in parsed[k] or not parsed[k][sub_k] or parsed[k][sub_k] == "string":
                             parsed[k][sub_k] = sub_v
+                        elif parsed[k][sub_k]:
+                            parsed[k][sub_k] = str(parsed[k][sub_k]).replace("*", "")
         return parsed
     except Exception as e:
         print(f"Synthesis failed: {e}")

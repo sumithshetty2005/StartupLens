@@ -1,3 +1,6 @@
+import os
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from sentence_transformers import CrossEncoder
 from src.rag.config import RERANK_MODEL_NAME
 
