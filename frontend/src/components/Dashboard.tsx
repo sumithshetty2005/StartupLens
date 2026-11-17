@@ -594,7 +594,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onBack, user, isGuest, onLogout }
         let stepIdx = 0;
         const intervalId = setInterval(() => {
             if (stepIdx < simulatedSteps.length) {
-                setLogs(prev => [...prev, `[${getTimestamp(stepIdx * 1.5)}] ${simulatedSteps[stepIdx]}`]);
+                const step = simulatedSteps[stepIdx];
+                if (step) {
+                    setLogs(prev => [...prev, `[${getTimestamp(stepIdx * 1.5)}] ${step}`]);
+                }
                 stepIdx++;
             } else {
                 const extraIndex = stepIdx - simulatedSteps.length;
@@ -604,7 +607,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onBack, user, isGuest, onLogout }
                     `Verification pipeline evaluating break-even matrix...`,
                     `Parsing complex JSON memo outputs...`
                 ];
-                if (extraIndex < extraLogs.length) {
+                if (extraIndex < extraLogs.length && extraLogs[extraIndex]) {
                     setLogs(prev => [...prev, `[${getTimestamp(stepIdx * 1.5)}] ${extraLogs[extraIndex]}`]);
                     stepIdx++;
                 }

@@ -186,7 +186,7 @@ def analyze():
                  
     # If all Gemini keys failed due to exhaustion or invalidity, trigger fallback
     if not json_response and last_error_msg and any(term in last_error_msg.upper() for term in ["QUOTA", "LIMIT", "EXHAUSTED", "INVALID", "UNAVAILABLE", "503", "429", "API KEY"]):
-         print("    -> All Gemini keys exhausted or unavailable! Falling back to Secondary (Groq: openai/gpt-oss-120b)...")
+         print("    -> All Gemini keys exhausted or unavailable! Falling back to Secondary (Groq: qwen/qwen3.8-27b)...")
          groq_api_key = os.environ.get("GROQ_API_KEY")
          if not groq_api_key:
              print("    -> Missing GROQ_API_KEY for fallback.")
@@ -194,10 +194,10 @@ def analyze():
              
          try:
              from langchain_groq import ChatGroq
-             llm = ChatGroq(temperature=0.2, model_name="openai/gpt-oss-120b", groq_api_key=groq_api_key)
+             llm = ChatGroq(temperature=0.2, model_name="qwen/qwen3.8-27b", groq_api_key=groq_api_key)
              response = llm.invoke(master_prompt)
              json_response = response.content
-             print("    -> Success on Secondary (Groq: openai/gpt-oss-120b).")
+             print("    -> Success on Secondary (Groq: qwen/qwen3.8-27b).")
          except Exception as fallback_e:
              fallback_error = str(fallback_e)
              print(f"    -> Error on Secondary: {fallback_error}")
@@ -247,9 +247,23 @@ def analyze():
             except Exception as e:
                 # If still failing, try loading the raw extracted_json as fallback
                 print(f"Sanitized JSON load failed: {e}. Trying raw extracted JSON...")
-                full_data = json.loads(extracted_json)
-                research_data = full_data.get('research', {})
-                strategy_data = full_data.get('strategy', {})
+                try:
+                    full_data = json.loads(extracted_json)
+                    research_data = full_data.get('research', {})
+                    strategy_data = full_data.get('strategy', {})
+                except Exception as raw_e:
+                    # Attempt auto-healing of missing closing braces/brackets
+                    print(f"Raw extracted JSON failed: {raw_e}. Attempting auto-healing missing brackets...")
+                    healed_json = extracted_json
+                    open_c = healed_json.count('{') - healed_json.count('}')
+                    if open_c > 0:
+                        healed_json += '}' * open_c
+                    open_b = healed_json.count('[') - healed_json.count(']')
+                    if open_b > 0:
+                        healed_json += ']' * open_b
+                    full_data = json.loads(healed_json)
+                    research_data = full_data.get('research', {})
+                    strategy_data = full_data.get('strategy', {})
         else:
             raise ValueError("No valid JSON found in response")
             
