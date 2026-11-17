@@ -1,13 +1,12 @@
-<!--
 ---
 title: StartupLens
 emoji: 🔎
 colorFrom: gray
 colorTo: indigo
 sdk: docker
+app_port: 7860
 pinned: false
 ---
--->
 
 # 🔎 StartupLens: Your Autonomous AI Copilot
 
