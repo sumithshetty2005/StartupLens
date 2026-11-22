@@ -26,14 +26,26 @@ StartupLens is an autonomous venture intelligence and market validation co-pilot
 <table width="100%">
   <tr>
     <td width="50%" align="center">
-      <img src="docs/screenshots/dashboard-input.png" alt="Startup Hypothesis & Market Targeting Dashboard" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;" />
+      <img src="docs/screenshots/landing-hero.png" alt="StartupLens Landing Interface & 3D Simulation" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;" />
       <br />
-      <em><b>Figure 1:</b> Startup Hypothesis Input & Geographic Market Configuration</em>
+      <em><b>Figure 1:</b> Interactive Landing Interface & 3D Autonomous Simulation Scene</em>
     </td>
     <td width="50%" align="center">
-      <img src="docs/screenshots/validation-report.png" alt="Autonomous Venture Intelligence & Investment Memo Report" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;" />
+      <img src="docs/screenshots/dashboard-input.png" alt="Startup Hypothesis & Market Targeting Configuration" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;" />
       <br />
-      <em><b>Figure 2:</b> Synthesized Validation Memo, Viability Index & Post-Mortem Analytics</em>
+      <em><b>Figure 2:</b> Startup Hypothesis Input, Sector Specification & Geographic Market Targeting</em>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/screenshots/realtime-agent-execution.png" alt="Real-Time Proactive Agent Execution & Vector Retrieval Monitor" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;" />
+      <br />
+      <em><b>Figure 3:</b> Real-Time Multi-Agent Grounding, Crawling & Vector Store Retrieval Monitor</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/screenshots/validation-report.png" alt="Synthesized Venture Intelligence Report & Market Sizing" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;" />
+      <br />
+      <em><b>Figure 4:</b> Synthesized Viability Score, Whitespace Opportunity & TAM/SAM/SOM Sizing</em>
     </td>
   </tr>
 </table>
@@ -404,6 +416,6 @@ docker run -p 7860:7860 --env-file .env startuplens-backend
 ## Project Links
 
 - **Demo Video Link:** [Video Presentation](https://drive.google.com/drive/u/0/folders/1Fiobl0-W6ajw6asrBZznjJ7qF0629BAj)
-- **Live Deployed Application:** [https://startup-lens-eight.vercel.app](https://startup-lens-eight.vercel.app)
+- **Live Deployed Application:** [https://startup-lens-ten.vercel.app](https://startup-lens-ten.vercel.app) (Mirror: [https://startup-lens-eight.vercel.app](https://startup-lens-eight.vercel.app))
 - **API Documentation & Contracts:** [Interactive Swagger & REST Specification](API_DOCS.md)
 - **Source Code Repository:** [GitHub Repository](https://github.com/sumithshetty2005/StartupLens)
