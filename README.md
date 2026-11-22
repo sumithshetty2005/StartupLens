@@ -11,7 +11,6 @@ pinned: false
 # StartupLens — Autonomous AI Co-Pilot for Market Validation
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-black?style=for-the-badge&logo=vercel)](https://startup-lens-ten.vercel.app)
-[![API Docs](https://img.shields.io/badge/API_Docs-Interactive_Swagger-009688?style=for-the-badge&logo=fastapi)](API_DOCS.md)
 [![Tech Stack](https://img.shields.io/badge/Stack-FastAPI%20%7C%20LangGraph%20%7C%20ChromaDB%20%7C%20Gemini%202.5%20Flash%20%7C%20React-blue?style=for-the-badge)](https://github.com/sumithshetty2005/StartupLens)
 
 StartupLens is an autonomous venture intelligence and market validation co-pilot engineered to transform raw startup hypotheses into rigorous, data-grounded investment memos in seconds. By orchestrating multi-agent reasoning, real-time web grounding, and corrective retrieval over historical startup post-mortems, the platform enables founders and venture evaluators to de-risk capital allocation before building.
