@@ -15,9 +15,6 @@ pinned: false
 
 StartupLens is an autonomous venture intelligence and market validation co-pilot engineered to transform raw startup hypotheses into rigorous, data-grounded investment memos in seconds. By orchestrating multi-agent reasoning, real-time web grounding, and corrective retrieval over historical startup post-mortems, the platform enables founders and venture evaluators to de-risk capital allocation before building.
 
-> [!NOTE]
-> **Free-Tier Host Latency Notice:** The production backend is hosted on a free-tier cloud container (Hugging Face Spaces). Initial requests following idle periods may encounter a 30–50 second cold-start spin-up latency while the container initializes model weights and vector indexes. Subsequent analyses execute with standard high-throughput performance.
-
 ---
 
 ## Product Interface Showcase
